@@ -1,0 +1,5 @@
+camera.spawn_camera_rigs.camera_rig_config = [
+
+    {'loc': (0, 0, 25), 'rot_euler': (-1.5708, 0, 0)},
+
+]
