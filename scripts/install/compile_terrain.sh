@@ -9,7 +9,7 @@
 shopt -s expand_aliases
 set -e
 
-cd ./infinigen/terrain
+cd ../../infinigen/terrain
 
 elements=(
     "voronoi_rocks"
@@ -134,6 +134,6 @@ echo "compiled lib/cpu/soil_machine/SoilMachine.so"
 
 cd -
 
-cd ./infinigen/OcMesher
+cd ../../infinigen/OcMesher
 source install.sh
 cd -

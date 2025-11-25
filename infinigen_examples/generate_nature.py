@@ -263,6 +263,7 @@ def compose_nature(output_folder, scene_seed, **params):
 
     def camera_preprocess():
         camera_rigs = cam_util.spawn_camera_rigs()
+        # camera_rigs = cam_util.spawn_circular_camera_config()
         scene_preprocessed = cam_util.camera_selection_preprocessing(
             terrain,
             terrain_mesh,
@@ -278,21 +279,24 @@ def compose_nature(output_folder, scene_seed, **params):
         "camera_preprocess", camera_preprocess, use_chance=False
     )
 
-    bbox = (
-        terrain.get_bounding_box()
-        if terrain is not None
-        else butil.bounds(terrain_mesh)
-    )
-    p.run_stage(
-        "pose_cameras",
-        lambda: cam_util.configure_cameras(
-            camera_rigs,
-            scene_preprocessed,
-            init_bounding_box=bbox,
-            terrain_mesh=terrain_mesh,
-        ),
-        use_chance=False,
-    )
+    # bbox = (
+    #     terrain.get_bounding_box()
+    #     if terrain is not None
+    #     else butil.bounds(terrain_mesh)
+    # )
+
+    # This stage is hugely time consuming, so I've commented it out and replaced it
+
+    # p.run_stage(
+    #     "pose_cameras",
+    #     lambda: cam_util.configure_cameras(
+    #         camera_rigs,
+    #         scene_preprocessed,
+    #         init_bounding_box=bbox,
+    #         terrain_mesh=terrain_mesh,
+    #     ),
+    #     use_chance=False,
+    # )
     primary_cams = [rig.children[0] for rig in camera_rigs]
 
     p.run_stage(
@@ -356,9 +360,26 @@ def compose_nature(output_folder, scene_seed, **params):
 
     pois += p.run_stage("flying_creatures", flying_creatures, default=[])
 
-    def animate_cameras():
-        cam_util.animate_cameras(camera_rigs, bbox, scene_preprocessed, pois=pois)
+    # I replaced this part with custom camera animation function that goes around in a circle.
 
+    # def animate_cameras():
+    #     cam_util.animate_cameras(camera_rigs, bbox, scene_preprocessed, pois=pois)
+
+    #     frames_folder = output_folder.parent / "frames"
+    #     animated_cams = [cam for cam in camera_rigs if cam.animation_data is not None]
+    #     save_imu_tum_files(frames_folder / "imu_tum", animated_cams)
+
+    # p.run_stage(
+    #     "animate_cameras",
+    #     animate_cameras,
+    #     use_chance=False,
+    # )
+
+    def animate_cameras():
+        # Move rigs around the circle and keyframe them
+        cam_util.animate_cameras_orbit(camera_rigs)
+
+        # Keep your IMU export logic as-is
         frames_folder = output_folder.parent / "frames"
         animated_cams = [cam for cam in camera_rigs if cam.animation_data is not None]
         save_imu_tum_files(frames_folder / "imu_tum", animated_cams)
@@ -368,6 +389,7 @@ def compose_nature(output_folder, scene_seed, **params):
         animate_cameras,
         use_chance=False,
     )
+    # to here.
 
     with logging_util.Timer("Compute coarse terrain frustrums"):
         terrain_inview, *_ = split_in_view.split_inview(

@@ -152,6 +152,37 @@ def spawn_camera_rigs(
     return [spawn_rig(i) for i in range(n_camera_rigs)]
 
 
+@gin.configurable
+def spawn_circular_camera_config(
+    camera_rig_config,
+    n_camera_rigs,
+) -> list[bpy.types.Object]:
+    # custom version of spawn_camera_rigs that uses passed in camera_rig_config and n_camera_rigs
+    rigs_col = butil.get_collection("camera_rigs")
+    cams_col = butil.get_collection("cameras")
+
+    def spawn_rig(i):
+        rig_parent = butil.spawn_empty(f"camrig.{i}")
+        butil.put_in_collection(rig_parent, rigs_col)
+
+        for j, config in enumerate(camera_rig_config):
+            cam = spawn_camera()
+            cam.name = cam_name(i, j)
+            cam.parent = rig_parent
+            center = Vector(config["center"])
+            radius = config["radius"]
+            height = config["height"]
+            cam.location = center + Vector((radius, 0, height))
+            direction = center - cam.location
+            cam.rotation_euler = direction.to_track_quat("Z", "Y").to_euler("XYZ")
+
+            butil.put_in_collection(cam, cams_col)
+
+        return rig_parent
+
+    return [spawn_rig(i) for i in range(n_camera_rigs)]
+
+
 def get_camera_rigs() -> list[bpy.types.Object]:
     if "camera_rigs" not in bpy.data.collections:
         raise ValueError("No camera rigs found")
@@ -707,6 +738,8 @@ def configure_cameras(
     else:
         center_coordinate = None
 
+    # This part of code is insufficient and prone to stuck.
+    # If you configure cameras by yourself, consider using pose_cameras_on_circle instead.
     for cam_rig in cam_rigs:
         views = compute_base_views(
             cam_rig,
@@ -731,6 +764,49 @@ def configure_cameras(
                 if not cam.type == "CAMERA":
                     continue
                 cam.data.dof.focus_distance = focus_dist
+
+
+@gin.configurable
+def pose_cameras_on_circle(
+    camera_rigs,
+    bbox,
+    height=5.0,
+    radius=None,
+    look_at_center=True,
+):
+    """
+    Place all camera rigs on a circle around the bounding box center.
+    Configurable via Gin.
+    """
+    min_corner, max_corner = bbox
+    center = 0.5 * (min_corner + max_corner)
+
+    # Default radius if not provided
+    if radius is None:
+        radius = 0.5 * max(
+            max_corner[0] - min_corner[0],
+            max_corner[1] - min_corner[1],
+        )
+
+    for i, cam_rig in enumerate(camera_rigs):
+        theta = 2 * np.pi * i / len(camera_rigs)
+
+        x = center[0] + radius * np.cos(theta)
+        y = center[1] + radius * np.sin(theta)
+        z = center[2] + height
+
+        cam_rig.location = (x, y, z)
+
+        if look_at_center:
+            loc_vec = Vector((x, y, z))
+            direction = (Vector(center) - loc_vec).normalized()
+            quat = direction.to_track_quat("-Z", "Y")
+            cam_rig.rotation_euler = quat.to_euler()
+
+        focal_length = 50  # You can adjust this value as needed
+        for cam in cam_rig.children:
+            cam.data.lens = random_general(focal_length)
+            cam.data.dof.focus_distance = (Vector(center) - cam_rig.location).length
 
 
 @gin.configurable
@@ -799,6 +875,109 @@ def animate_cameras(
             fatal=True,
             bounding_box=bounding_box,
         )
+
+
+@gin.configurable
+def animate_cameras_orbit(
+    cam_rigs,
+    center=(0, 0, 0),
+    radius=5.0,
+    angular_speed_deg=10.0,
+    phase_shift=True,
+):
+    """
+    center, radius, angular_speed_deg can be:
+      - Scalar (single value)
+      - List (different values per rig)
+    Can be passed from Gin config like:
+      center = [(0,0,0), (1,0,0)]
+      radius = [3, 5]
+      angular_speed_deg = [10.0, 15.0]
+    """
+
+    scene = bpy.context.scene
+    start = scene.frame_start
+    end = scene.frame_end
+    total_frames = end - start + 1
+
+    n_rigs = len(cam_rigs)
+
+    # If center/radius/angular_speed_deg is a list, ensure its length matches n_rigs
+    if (
+        isinstance(center, (list, tuple))
+        and len(center) > 0
+        and isinstance(center[0], (list, tuple, Vector))
+    ):
+        if len(center) != n_rigs:
+            raise ValueError(
+                f"len(center)={len(center)} but len(cam_rigs)={n_rigs}. "
+                "They must match when center is a list."
+            )
+        centers = [Vector(c) for c in center]
+    else:
+        # If center is a single (x,y,z) value → common to all rigs
+        centers = [Vector(center)] * n_rigs
+
+    # If radius is a list, ensure its length matches n_rigs
+    if isinstance(radius, (list, tuple)):
+        if len(radius) != n_rigs:
+            raise ValueError(
+                f"len(radius)={len(radius)} but len(cam_rigs)={n_rigs}. "
+                "They must match when radius is a list."
+            )
+        radii = list(radius)
+    else:
+        radii = [radius] * n_rigs
+
+    # If angular_speed_deg is a list, ensure its length matches n_rigs
+    if isinstance(angular_speed_deg, (list, tuple)):
+        if len(angular_speed_deg) != n_rigs:
+            raise ValueError(
+                f"len(angular_speed_deg)={len(angular_speed_deg)} but len(cam_rigs)={n_rigs}. "
+                "They must match when angular_speed_deg is a list."
+            )
+        speeds_deg = list(angular_speed_deg)
+    else:
+        speeds_deg = [angular_speed_deg] * n_rigs
+
+    # -------- Animation main body --------
+    for i, rig in enumerate(cam_rigs):
+        # Initialize values for this rig
+        center_i = centers[i]
+        radius_i = radii[i]
+        speed_deg_i = speeds_deg[i]
+
+        # Get all cameras belonging to this rig
+        cameras = [child for child in rig.children if child.type == "CAMERA"]
+
+        # Slightly shift the phase for each rig (useful for evenly distributing on the circumference)
+        phi = (2 * np.pi * i / n_rigs) if phase_shift else 0.0
+
+        # Animate each camera in this rig
+        for cam in cameras:
+            # Store initial camera position relative to rig (in local coordinates)
+            initial_loc = Vector(cam.location)
+
+            for fi, frame in enumerate(range(start, end + 1)):
+                # Reinitialize per frame to ensure clean calculation
+                t = fi / total_frames
+                theta = speed_deg_i * t * (np.pi / 180.0) + phi
+
+                # Calculate position on circular trajectory in XY plane
+                x_offset = radius_i * np.cos(theta)
+                y_offset = radius_i * np.sin(theta)
+
+                # Camera moves on circle, maintaining its initial Z offset from rig
+                cam.location = Vector((x_offset, y_offset, initial_loc.z))
+
+                # Calculate direction to look at center
+                cam_world_pos = rig.matrix_world @ cam.location
+                direction = (center_i - cam_world_pos).normalized()
+                quat = direction.to_track_quat("-Z", "Y")
+                cam.rotation_euler = quat.to_euler()
+
+                cam.keyframe_insert(data_path="location", frame=frame)
+                cam.keyframe_insert(data_path="rotation_euler", frame=frame)
 
 
 @gin.configurable
