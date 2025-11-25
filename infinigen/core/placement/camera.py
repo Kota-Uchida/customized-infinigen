@@ -1052,3 +1052,111 @@ if __name__ == "__main__":
 
     color_depth = colorize_depth(depth_output)
     imageio.imwrite("color_depth.png", color_depth)
+
+
+@gin.configurable
+def spawn_and_animate_cameras(
+    scene_bvh: BVHTree,
+    cam_configs,
+    n_cameras,
+):
+    """
+    Gin configurable function that create circular camera trajectory pointing at a given focus.
+    focus_list [(x_f,y_f,z_f)] : list of focus points.
+    center_list [(x_o,y_o,z_o)] : list of center points. z of camera trajectory will stay constant.
+    radius_list [r] : list of radii for the camera trajectories.
+    angular_velocity_list : list of angular velocities.
+    n_cameras : number of cameras per scene. The number of compoents of all other arguments should equal this value.
+
+    Use BvhTree of the scene to avoid placing cameras inside the mesh.
+    """
+    if not (len(cam_configs) == n_cameras):
+        raise ValueError(f"configure num: {len(cam_configs)}, n_cameras: {n_cameras}")
+
+    scene = bpy.context.scene
+    start = scene.frame_start
+    end = scene.frame_end
+
+    cameras_col = bpy.data.collections.get("cameras")
+    if cameras_col is None:
+        cameras_col = bpy.data.collections.new("cameras")
+        scene.collection.children.link(cameras_col)
+
+    rigs_col = bpy.data.collections.get("camera_rigs")
+    if rigs_col is None:
+        rigs_col = bpy.data.collections.new("camera_rigs")
+        scene.collection.children.link(rigs_col)
+
+    camera_rigs = []
+    spawned_cameras = []
+
+    for i in range(n_cameras):
+        # Add nominal camera rig for compatibility
+        rig = butil.spawn_empty(f"camrig.{i}")
+        butil.put_in_collection(rig, rigs_col)
+        camera_rigs.append(rig)
+
+        # add cameras
+        cam = spawn_camera()
+        cam.name = cam_name(i, 0)
+        cam.parent = rig
+        cam.location = Vector((0, 0, 0))
+        cam.rotation_euler = Vector((0, 0, 0))
+        butil.put_in_collection(cam, cameras_col)
+        spawned_cameras.append(cam)
+
+    # Find trajectory for each cameras
+    max_tries = 100
+    min_dist = 1.0
+    max_dist = 1e2
+    z_step = 0.05
+    for i in tqdm(range(n_cameras), desc="Animating cameras"):
+        cfg = cam_configs[i]
+        focus = Vector(cfg["focus"])
+        center = Vector(cfg["center"])
+        r = cfg["radius"]
+        w = cfg["angular_velocity"]
+        cam = spawned_cameras[i]
+        center_x = center.x
+        center_y = center.y
+        z = center.z
+
+        for fi, frame in enumerate(range(start, end + 1)):
+            t = fi
+            x = center_x + r * np.cos(w * t)
+            y = center_y + r * np.sin(w * t)
+
+            # Check if the camera do not collide with the scene
+            for _ in range(max_tries):
+                loc = Vector((x, y, z))
+                direction = (focus - loc).normalized()
+                up_direction = Vector((0, 0, 1))
+                max_length = np.sqrt(
+                    (loc.x - focus.x) ** 2
+                    + (loc.y - focus.y) ** 2
+                    + (loc.z - focus.z) ** 2
+                )
+                _, _, _, dist_up = scene_bvh.ray_cast(loc, up_direction, max_dist)
+                _, _, _, dist_focus = scene_bvh.ray_cast(loc, direction, max_length)
+                _, _, _, dist_down = scene_bvh.ray_cast(loc, -up_direction, max_dist)
+
+                # Increment if the camera is too close to the scene.
+                if dist_focus is not None and dist_focus < min_dist:
+                    z += z_step
+                elif dist_up is not None:
+                    z += z_step
+                elif dist_down is not None and dist_down < min_dist:
+                    z += z_step
+                else:
+                    break
+
+            cam.location = Vector((x, y, z))
+
+            direction = (focus - cam.location).normalized()
+            quat = direction.to_track_quat("-Z", "Y")
+            cam.rotation_euler = quat.to_euler()
+
+            cam.keyframe_insert("location", frame=frame)
+            cam.keyframe_insert("rotation_euler", frame=frame)
+
+    return camera_rigs

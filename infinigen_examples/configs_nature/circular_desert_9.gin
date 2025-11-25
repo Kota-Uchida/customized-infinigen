@@ -1,0 +1,11 @@
+camera.spawn_and_animate_cameras.cam_configs = [
+    {'focus': (0.368, -1.060, 5.291), 'center': (-1.067, -0.554, 6.278), 'radius': 3.442, 'angular_velocity': 0.145},
+    {'focus': (1.814, -0.767, 5.036), 'center': (-0.583, -1.163, 6.096), 'radius': 4.437, 'angular_velocity': 0.113},
+    {'focus': (-0.519, -0.104, 5.132), 'center': (1.387, 0.431, 6.487), 'radius': 3.383, 'angular_velocity': 0.149},
+    {'focus': (-2.057, -0.152, 5.030), 'center': (-0.825, 1.957, 6.301), 'radius': 4.555, 'angular_velocity': 0.107},
+    {'focus': (0.959, -1.354, 5.089), 'center': (0.188, -0.022, 6.487), 'radius': 3.263, 'angular_velocity': 0.146},
+    {'focus': (-2.593, -0.644, 5.191), 'center': (-0.623, -0.962, 6.170), 'radius': 3.533, 'angular_velocity': 0.113},
+    {'focus': (0.380, -2.114, 5.052), 'center': (1.990, 0.152, 6.391), 'radius': 4.581, 'angular_velocity': 0.148},
+    {'focus': (3.075, -1.602, 5.139), 'center': (1.742, -1.558, 6.328), 'radius': 3.152, 'angular_velocity': 0.148},
+    {'focus': (0.023, -1.073, 5.090), 'center': (-0.428, 0.680, 6.283), 'radius': 3.273, 'angular_velocity': 0.145},
+]

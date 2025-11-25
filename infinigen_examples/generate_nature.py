@@ -261,9 +261,20 @@ def compose_nature(output_folder, scene_seed, **params):
 
     p.run_stage("cactus", add_cactus, terrain_mesh)
 
-    def camera_preprocess():
-        camera_rigs = cam_util.spawn_camera_rigs()
-        # camera_rigs = cam_util.spawn_circular_camera_config()
+    # def camera_preprocess():
+    #     camera_rigs = cam_util.spawn_camera_rigs()
+    #     scene_preprocessed = cam_util.camera_selection_preprocessing(
+    #         terrain,
+    #         terrain_mesh,
+    #         tags_ratio=params.get("camera_selection_tags_ratio"),
+    #         ranges_ratio=params.get("camera_selection_ranges_ratio"),
+    #         anim_criterion_keys=params.get(
+    #             "camera_selection_anim_criterion_keys", False
+    #         ),
+    #     )
+    #     return camera_rigs, scene_preprocessed
+
+    def camera_process():
         scene_preprocessed = cam_util.camera_selection_preprocessing(
             terrain,
             terrain_mesh,
@@ -273,10 +284,13 @@ def compose_nature(output_folder, scene_seed, **params):
                 "camera_selection_anim_criterion_keys", False
             ),
         )
-        return camera_rigs, scene_preprocessed
+        camera_rigs = cam_util.spawn_and_animate_cameras(
+            scene_preprocessed["scene_bvh"]
+        )
+        return camera_rigs
 
-    camera_rigs, scene_preprocessed = p.run_stage(
-        "camera_preprocess", camera_preprocess, use_chance=False
+    camera_rigs = p.run_stage(
+        "camera spawn and animate", camera_process, use_chance=False
     )
 
     # bbox = (
@@ -375,21 +389,21 @@ def compose_nature(output_folder, scene_seed, **params):
     #     use_chance=False,
     # )
 
-    def animate_cameras():
-        # Move rigs around the circle and keyframe them
-        cam_util.animate_cameras_orbit(camera_rigs)
+    # def animate_cameras():
+    #     # Move rigs around the circle and keyframe them
+    #     cam_util.animate_cameras_orbit(camera_rigs)
 
-        # Keep your IMU export logic as-is
-        frames_folder = output_folder.parent / "frames"
-        animated_cams = [cam for cam in camera_rigs if cam.animation_data is not None]
-        save_imu_tum_files(frames_folder / "imu_tum", animated_cams)
+    #     # Keep your IMU export logic as-is
+    #     frames_folder = output_folder.parent / "frames"
+    #     animated_cams = [cam for cam in camera_rigs if cam.animation_data is not None]
+    #     save_imu_tum_files(frames_folder / "imu_tum", animated_cams)
 
-    p.run_stage(
-        "animate_cameras",
-        animate_cameras,
-        use_chance=False,
-    )
-    # to here.
+    # p.run_stage(
+    #     "animate_cameras",
+    #     animate_cameras,
+    #     use_chance=False,
+    # )
+    # # to here.
 
     with logging_util.Timer("Compute coarse terrain frustrums"):
         terrain_inview, *_ = split_in_view.split_inview(
