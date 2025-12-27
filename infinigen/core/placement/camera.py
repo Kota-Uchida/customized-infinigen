@@ -152,35 +152,35 @@ def spawn_camera_rigs(
     return [spawn_rig(i) for i in range(n_camera_rigs)]
 
 
-@gin.configurable
-def spawn_circular_camera_config(
-    camera_rig_config,
-    n_camera_rigs,
-) -> list[bpy.types.Object]:
-    # custom version of spawn_camera_rigs that uses passed in camera_rig_config and n_camera_rigs
-    rigs_col = butil.get_collection("camera_rigs")
-    cams_col = butil.get_collection("cameras")
+# @gin.configurable
+# def spawn_circular_camera_config(
+#     camera_rig_config,
+#     n_camera_rigs,
+# ) -> list[bpy.types.Object]:
+#     # custom version of spawn_camera_rigs that uses passed in camera_rig_config and n_camera_rigs
+#     rigs_col = butil.get_collection("camera_rigs")
+#     cams_col = butil.get_collection("cameras")
 
-    def spawn_rig(i):
-        rig_parent = butil.spawn_empty(f"camrig.{i}")
-        butil.put_in_collection(rig_parent, rigs_col)
+#     def spawn_rig(i):
+#         rig_parent = butil.spawn_empty(f"camrig.{i}")
+#         butil.put_in_collection(rig_parent, rigs_col)
 
-        for j, config in enumerate(camera_rig_config):
-            cam = spawn_camera()
-            cam.name = cam_name(i, j)
-            cam.parent = rig_parent
-            center = Vector(config["center"])
-            radius = config["radius"]
-            height = config["height"]
-            cam.location = center + Vector((radius, 0, height))
-            direction = center - cam.location
-            cam.rotation_euler = direction.to_track_quat("Z", "Y").to_euler("XYZ")
+#         for j, config in enumerate(camera_rig_config):
+#             cam = spawn_camera()
+#             cam.name = cam_name(i, j)
+#             cam.parent = rig_parent
+#             center = Vector(config["center"])
+#             radius = config["radius"]
+#             height = config["height"]
+#             cam.location = center + Vector((radius, 0, height))
+#             direction = center - cam.location
+#             cam.rotation_euler = direction.to_track_quat("Z", "Y").to_euler("XYZ")
 
-            butil.put_in_collection(cam, cams_col)
+#             butil.put_in_collection(cam, cams_col)
 
-        return rig_parent
+#         return rig_parent
 
-    return [spawn_rig(i) for i in range(n_camera_rigs)]
+#     return [spawn_rig(i) for i in range(n_camera_rigs)]
 
 
 def get_camera_rigs() -> list[bpy.types.Object]:
@@ -766,47 +766,47 @@ def configure_cameras(
                 cam.data.dof.focus_distance = focus_dist
 
 
-@gin.configurable
-def pose_cameras_on_circle(
-    camera_rigs,
-    bbox,
-    height=5.0,
-    radius=None,
-    look_at_center=True,
-):
-    """
-    Place all camera rigs on a circle around the bounding box center.
-    Configurable via Gin.
-    """
-    min_corner, max_corner = bbox
-    center = 0.5 * (min_corner + max_corner)
+# @gin.configurable
+# def pose_cameras_on_circle(
+#     camera_rigs,
+#     bbox,
+#     height=5.0,
+#     radius=None,
+#     look_at_center=True,
+# ):
+#     """
+#     Place all camera rigs on a circle around the bounding box center.
+#     Configurable via Gin.
+#     """
+#     min_corner, max_corner = bbox
+#     center = 0.5 * (min_corner + max_corner)
 
-    # Default radius if not provided
-    if radius is None:
-        radius = 0.5 * max(
-            max_corner[0] - min_corner[0],
-            max_corner[1] - min_corner[1],
-        )
+#     # Default radius if not provided
+#     if radius is None:
+#         radius = 0.5 * max(
+#             max_corner[0] - min_corner[0],
+#             max_corner[1] - min_corner[1],
+#         )
 
-    for i, cam_rig in enumerate(camera_rigs):
-        theta = 2 * np.pi * i / len(camera_rigs)
+#     for i, cam_rig in enumerate(camera_rigs):
+#         theta = 2 * np.pi * i / len(camera_rigs)
 
-        x = center[0] + radius * np.cos(theta)
-        y = center[1] + radius * np.sin(theta)
-        z = center[2] + height
+#         x = center[0] + radius * np.cos(theta)
+#         y = center[1] + radius * np.sin(theta)
+#         z = center[2] + height
 
-        cam_rig.location = (x, y, z)
+#         cam_rig.location = (x, y, z)
 
-        if look_at_center:
-            loc_vec = Vector((x, y, z))
-            direction = (Vector(center) - loc_vec).normalized()
-            quat = direction.to_track_quat("-Z", "Y")
-            cam_rig.rotation_euler = quat.to_euler()
+#         if look_at_center:
+#             loc_vec = Vector((x, y, z))
+#             direction = (Vector(center) - loc_vec).normalized()
+#             quat = direction.to_track_quat("-Z", "Y")
+#             cam_rig.rotation_euler = quat.to_euler()
 
-        focal_length = 50  # You can adjust this value as needed
-        for cam in cam_rig.children:
-            cam.data.lens = random_general(focal_length)
-            cam.data.dof.focus_distance = (Vector(center) - cam_rig.location).length
+#         focal_length = 50  # You can adjust this value as needed
+#         for cam in cam_rig.children:
+#             cam.data.lens = random_general(focal_length)
+#             cam.data.dof.focus_distance = (Vector(center) - cam_rig.location).length
 
 
 @gin.configurable
@@ -1116,10 +1116,13 @@ def spawn_and_animate_cameras(
         center = Vector(cfg["center"])
         r = cfg["radius"]
         w = cfg["angular_velocity"]
+        f = cfg["focal_length"]
         cam = spawned_cameras[i]
         center_x = center.x
         center_y = center.y
         z = center.z
+
+        cam.data.lens = f
 
         for fi, frame in enumerate(range(start, end + 1)):
             t = fi
